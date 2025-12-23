@@ -1,12 +1,12 @@
-'use client'
+"use client";
 
-import { useEffect, useState, type ReactNode } from 'react'
-import type { VariantsProps } from './types'
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { VariantsProps } from "./types";
 import {
   generateVariantId,
   generateReadScript,
   generateVariantCSS,
-} from './script-generator'
+} from "./script-generator";
 
 /**
  * Variants component - renders different content based on client-side variant value
@@ -45,21 +45,37 @@ export function Variants<const T extends readonly string[]>({
   use,
   children,
 }: VariantsProps<T>): ReactNode {
-  const variantId = generateVariantId(use.key, use.options)
+  const variantId = generateVariantId(use.key, use.options);
 
   // Track active variant after hydration
-  const [activeVariant, setActiveVariant] = useState<string | null>(null)
+  const activeVariant = useMemo(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    return (
+      document.documentElement.getAttribute(`data-${use.key}`) || use.default
+    );
+  }, [use.key, use.default]);
+
+  const [shouldCleanup, setShouldCleanup] = useState(false);
 
   useEffect(() => {
-    // Read current value from HTML attribute (set by inline script)
-    const attrName = `data-${use.key}`
-    const value = document.documentElement.getAttribute(attrName) || use.default
-    setActiveVariant(value)
-  }, [use.key, use.default])
+    const handleLoad = () => setShouldCleanup(true);
+
+    // Check if load already fired (common in SPAs or lazy-loaded components)
+    if (document.readyState === "complete") {
+      setShouldCleanup(true);
+    } else {
+      window.addEventListener("load", handleLoad);
+    }
+
+    return () => window.removeEventListener("load", handleLoad);
+  }, []);
 
   // Generate scripts and CSS
-  const readScript = generateReadScript(use)
-  const css = generateVariantCSS(use, variantId)
+  const readScript = generateReadScript(use);
+  const css = generateVariantCSS(use, variantId);
 
   return (
     <>
@@ -78,10 +94,9 @@ export function Variants<const T extends readonly string[]>({
       {use.options.map((option) => {
         // Before hydration (activeVariant null): render all (CSS hides non-matching)
         // After hydration: only render the active variant
-        const shouldRender = activeVariant === null || activeVariant === option
+        const shouldRender = activeVariant === null || activeVariant === option;
 
-        if (!shouldRender) {
-          // Keep wrapper div for CSS, but empty
+        if (shouldCleanup && !shouldRender) {
           return (
             <div
               key={option}
@@ -89,7 +104,7 @@ export function Variants<const T extends readonly string[]>({
               data-variant-key={variantId}
               suppressHydrationWarning
             />
-          )
+          );
         }
 
         return (
@@ -101,8 +116,8 @@ export function Variants<const T extends readonly string[]>({
           >
             {children[option as T[number]]}
           </div>
-        )
+        );
       })}
     </>
-  )
+  );
 }

@@ -18,7 +18,8 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "Bash(cat:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(node:*)"
     ]
   }
 }
