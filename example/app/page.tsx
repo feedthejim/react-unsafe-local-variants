@@ -77,12 +77,26 @@ export default function Home() {
             color: "#fff",
           }}
         >
-          {`const theme = variant({
+          {`// 1. Define variant (variants.ts)
+const theme = variant({
   key: 'theme-choice',
   options: ['light', 'dark', 'system'],
   default: 'system',
   read: fromLocalStorage('theme')
-})`}
+})
+
+// 2. Render (page.tsx)
+<Variants use={theme}>
+  {{
+    light: <LightTheme />,
+    dark: <DarkTheme />,
+    system: <SystemTheme />
+  }}
+</Variants>
+
+// 3. Update value (client component)
+localStorage.setItem('theme', 'dark')
+location.reload()`}
         </pre>
       </section>
 
@@ -184,12 +198,26 @@ export default function Home() {
           </Variants>
         </div>
         <pre className="code-block">
-          {`const viewMode = variant({
+          {`// 1. Define variant (variants.ts)
+const viewMode = variant({
   key: 'view-mode',
   options: ['grid', 'list', 'compact'],
   default: 'list',
   read: fromCookie('view_mode')
-})`}
+})
+
+// 2. Render (page.tsx)
+<Variants use={viewMode}>
+  {{
+    grid: <GridView />,
+    list: <ListView />,
+    compact: <CompactView />
+  }}
+</Variants>
+
+// 3. Update value (client component)
+document.cookie = 'view_mode=grid;path=/;max-age=31536000'
+location.reload()`}
         </pre>
       </section>
 
@@ -270,12 +298,25 @@ export default function Home() {
           }}
         </Variants>
         <pre className="code-block">
-          {`const featureFlag = variant({
+          {`// 1. Define variant (variants.ts)
+const featureFlag = variant({
   key: 'feature',
   options: ['stable', 'beta', 'experimental'],
   default: 'stable',
   read: fromSearchParam('feature')
-})`}
+})
+
+// 2. Render (page.tsx)
+<Variants use={featureFlag}>
+  {{
+    stable: <StableFeatures />,
+    beta: <BetaFeatures />,
+    experimental: <ExperimentalFeatures />
+  }}
+</Variants>
+
+// 3. Update: just change the URL
+// ?feature=beta or ?feature=experimental`}
         </pre>
       </section>
 
@@ -350,7 +391,8 @@ export default function Home() {
           }}
         </Variants>
         <pre className="code-block">
-          {`const motionPref = variant({
+          {`// 1. Define variant (variants.ts)
+const motionPref = variant({
   key: 'motion',
   options: ['full', 'reduced'],
   default: 'full',
@@ -358,7 +400,17 @@ export default function Home() {
     true: 'reduced',
     false: 'full'
   })
-})`}
+})
+
+// 2. Render (page.tsx)
+<Variants use={motionPref}>
+  {{
+    full: <AnimatedContent />,
+    reduced: <StaticContent />
+  }}
+</Variants>
+
+// Read-only: controlled by OS accessibility settings`}
         </pre>
       </section>
 
@@ -410,7 +462,8 @@ export default function Home() {
           }}
         </Variants>
         <pre className="code-block">
-          {`const colorScheme = variant({
+          {`// 1. Define variant (variants.ts)
+const colorScheme = variant({
   key: 'color-scheme',
   options: ['light', 'dark'],
   default: 'light',
@@ -418,7 +471,17 @@ export default function Home() {
     true: 'dark',
     false: 'light'
   })
-})`}
+})
+
+// 2. Render (page.tsx)
+<Variants use={colorScheme}>
+  {{
+    light: <LightModeUI />,
+    dark: <DarkModeUI />
+  }}
+</Variants>
+
+// Read-only: controlled by OS theme settings`}
         </pre>
       </section>
 
