@@ -17,7 +17,8 @@
       "Bash(xargs kill:*)",
       "WebSearch",
       "WebFetch(domain:github.com)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(ls:*)"
     ]
   }
 }

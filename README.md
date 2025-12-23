@@ -1,299 +1,287 @@
-# next-unsafe-client-variants
+# react-unsafe-local-variants
 
-**Pre-paint client-side rendering for Next.js App Router** - Synchronously read browser-only params (search params, cookies, localStorage, media queries) during HTML parsing and apply DOM changes before first paint.
+**Zero-flash client-side variants for React SSR/SSG** - Read localStorage, cookies, URL params & media queries before first paint.
 
-> ⚠️ **"Unsafe" Warning**: This package is marked "unsafe" because it enables reading client-side values during SSG/ISR, which can lead to hydration mismatches if not used carefully. Use only for non-critical UI variants (themes, layout preferences) where the tradeoff is acceptable.
+> **"Unsafe" Warning**: This package enables reading client-side values during SSR/SSG, which can cause hydration mismatches if misused. Use only for non-critical UI variants (themes, layout preferences) where the tradeoff is acceptable.
 
 ## Features
 
-- **Zero Flash**: Apply DOM attributes, classes, and CSS variables before first paint
-- **SSG/ISR Compatible**: Works with statically generated Next.js pages
-- **Multiple Variants**: Render multiple HTML variants and select one with CSS (no hydration mismatch)
-- **Tiny**: Inline script is <2KB gzipped
-- **Type-Safe**: Full TypeScript support
-- **App Router Only**: Built specifically for Next.js 13+ App Router
+- **Zero Flash**: Inline script + CSS selectors show correct variant before first paint
+- **SSG/ISR Compatible**: Works with statically generated pages
+- **Framework Agnostic**: Works with Next.js, Remix, or any React SSR framework
+- **Multiple Sources**: localStorage, cookies, URL search params, media queries
+- **Type-Safe**: Full TypeScript support with inferred variant types
+- **Auto-Pruning**: Hidden variants are removed from DOM after hydration
 
 ## Installation
 
 ```bash
-npm install next-unsafe-client-variants
+npm install react-unsafe-local-variants
 ```
 
 ## Quick Start
 
-### Basic Theme Example
-
 ```tsx
-// app/layout.tsx
-import { ClientInit } from 'next-unsafe-client-variants'
+// 1. Define your variant (variants.ts)
+import { variant, fromLocalStorage } from 'react-unsafe-local-variants'
 
-export default function RootLayout({ children }) {
+export const theme = variant({
+  key: 'theme',
+  options: ['light', 'dark', 'system'] as const,
+  default: 'system',
+  read: fromLocalStorage('theme')
+})
+
+// 2. Use it anywhere (page.tsx)
+import { Variants } from 'react-unsafe-local-variants'
+import { theme } from './variants'
+
+export default function Page() {
   return (
-    <html>
-      <head>
-        <ClientInit
-          reads={{
-            theme: {
-              from: 'localStorage',
-              key: 'theme',
-              allow: ['light', 'dark', 'system'],
-              default: 'system',
-            },
-          }}
-          apply={[
-            {
-              type: 'html-attr',
-              name: 'data-theme',
-              valueFrom: 'theme',
-              resolveSystemTheme: true // 'system' → 'dark' or 'light'
-            },
-            {
-              type: 'color-scheme',
-              valueFrom: 'theme',
-              resolveSystemTheme: true
-            },
-          ]}
-        />
-      </head>
-      <body>{children}</body>
-    </html>
+    <Variants use={theme}>
+      {{
+        light: <div className="light-theme">Light Mode</div>,
+        dark: <div className="dark-theme">Dark Mode</div>,
+        system: <div className="system-theme">Following OS</div>
+      }}
+    </Variants>
   )
 }
-```
 
-Your CSS can now use `html[data-theme="dark"]` selectors without flash!
+// 3. Update value (client component)
+'use client'
+function ThemeSwitcher() {
+  const setTheme = (value: string) => {
+    localStorage.setItem('theme', value)
+    location.reload()
+  }
+  return <button onClick={() => setTheme('dark')}>Dark Mode</button>
+}
+```
 
 ## API Reference
 
-### ClientInit (Server Component)
+### `variant(config)`
 
-Emits an inline script that runs during HTML parsing to read browser values and apply DOM changes.
-
-#### Props
+Creates a variant definition.
 
 ```typescript
-type ClientInitProps = {
-  reads: Record<string, ReadSpec>  // Values to read
-  apply?: ApplySpec[]              // DOM changes to apply
-  expose?: false | {               // Expose snapshot to client
-    global?: string                // Default: "__NEXT_CLIENT_INIT__"
-    once?: boolean                 // Default: true (delete after first read)
-  }
-  id?: string                      // Optional ID for deduplication
-}
+const theme = variant({
+  key: 'theme',                    // Unique key (used as data-* attribute)
+  options: ['light', 'dark'],      // Allowed values
+  default: 'light',                // Default value
+  read: fromLocalStorage('theme')  // How to read the value
+})
 ```
 
-#### ReadSpec
+### Read Helpers
+
+#### `fromLocalStorage(key)`
+
+Read from localStorage.
 
 ```typescript
-type ReadSpec = ReadSource & {
-  allow?: readonly string[]  // Whitelist of valid values
-  default: string            // Fallback value (required)
-  maxLen?: number            // Max length (default: 64)
-  pattern?: string           // Regex pattern for validation
-  fallback?: ReadSource      // Fallback source if primary fails
-}
-
-type ReadSource =
-  | { from: 'search'; name: string }                          // URL search param
-  | { from: 'cookie'; name: string }                          // Cookie value
-  | { from: 'localStorage'; key: string }                     // localStorage item
-  | { from: 'media'; query: string; trueValue: string; falseValue: string }  // Media query
+read: fromLocalStorage('theme')
 ```
 
-#### ApplySpec
+#### `fromCookie(name)`
+
+Read from cookies.
 
 ```typescript
-type ApplySpec =
-  | { type: 'html-attr'; name: string; valueFrom: string; map?: Record<string,string>; resolveSystemTheme?: boolean }
-  | { type: 'html-class'; name: string; valueFrom: string; map?: Record<string,string>; resolveSystemTheme?: boolean }
-  | { type: 'css-var'; name: string; valueFrom: string; map: Record<string,string>; resolveSystemTheme?: boolean }
-  | { type: 'css-vars'; valueFrom: string; sets: Record<string, Record<string,string>>; resolveSystemTheme?: boolean }
-  | { type: 'color-scheme'; valueFrom: string; resolveSystemTheme?: boolean }
+read: fromCookie('user_preference')
 ```
 
-### ClientVariants (Server Component)
+#### `fromSearchParam(name)`
 
-Renders multiple HTML variants and selects one pre-paint using CSS selectors.
+Read from URL search parameters.
+
+```typescript
+read: fromSearchParam('feature')
+// ?feature=beta → 'beta'
+```
+
+#### `fromMediaQuery(query, values)`
+
+Read from CSS media query.
+
+```typescript
+read: fromMediaQuery('(prefers-color-scheme: dark)', {
+  true: 'dark',
+  false: 'light'
+})
+```
+
+### `<Variants>`
+
+Renders variant content based on the active value.
 
 ```tsx
-import { ClientVariants } from 'next-unsafe-client-variants'
-
-<ClientVariants
-  select={{ attr: 'data-theme', default: 'light' }}
-  variants={{
-    light: <LightThemeContent />,
-    dark: <DarkThemeContent />,
+<Variants use={theme}>
+  {{
+    light: <LightContent />,
+    dark: <DarkContent />,
   }}
-  prune="after-hydration"  // Optional: remove inactive variants after hydration
-/>
+</Variants>
 ```
 
-### Client Functions
+## How It Works
 
-```tsx
-'use client'
-import { readClientInitOnce, useClientInitValue } from 'next-unsafe-client-variants/client'
+1. **Build**: All variants are rendered to HTML (SSG/ISR compatible)
+2. **Parse**: Inline script reads value, sets `data-*` attribute on `<html>`
+3. **Paint**: CSS shows correct variant instantly (no flash!)
+4. **Hydrate**: React picks up, prunes hidden variants from DOM
 
-// One-time read (consuming)
-const snapshot = readClientInitOnce()
-console.log(snapshot.theme) // 'dark'
+```
+Server HTML:
+<html>
+  <div data-variant="light">Light</div>  <!-- hidden by CSS -->
+  <div data-variant="dark">Dark</div>    <!-- visible -->
+</html>
 
-// Hook (non-consuming)
-function ThemeDisplay() {
-  const theme = useClientInitValue('theme')
-  return <div>Current theme: {theme}</div>
-}
+After Hydrate:
+<html data-theme="dark">
+  <div data-variant="dark">Dark</div>    <!-- only active variant remains -->
+</html>
 ```
 
 ## Examples
 
-### Complete Theme System with CSS Variables
+### Theme Switcher (localStorage)
 
 ```tsx
-// app/layout.tsx
-<ClientInit
-  reads={{
-    theme: {
-      from: 'localStorage',
-      key: 'theme',
-      allow: ['light', 'dark', 'system'],
-      default: 'system',
-    },
+// variants.ts
+export const theme = variant({
+  key: 'theme-choice',
+  options: ['light', 'dark', 'system'] as const,
+  default: 'system',
+  read: fromLocalStorage('theme')
+})
+
+// page.tsx
+<Variants use={theme}>
+  {{
+    light: <LightTheme />,
+    dark: <DarkTheme />,
+    system: <SystemTheme />
   }}
-  apply={[
-    { type: 'html-attr', name: 'data-theme', valueFrom: 'theme', resolveSystemTheme: true },
-    { type: 'color-scheme', valueFrom: 'theme', resolveSystemTheme: true },
-    {
-      type: 'css-vars',
-      valueFrom: 'theme',
-      resolveSystemTheme: true,
-      sets: {
-        light: {
-          '--bg': '#ffffff',
-          '--fg': '#000000',
-          '--primary': '#0070f3',
-        },
-        dark: {
-          '--bg': '#000000',
-          '--fg': '#ffffff',
-          '--primary': '#0070f3',
-        },
-      },
-    },
-  ]}
-/>
+</Variants>
+
+// ThemeSwitcher.tsx (client component)
+'use client'
+export function ThemeSwitcher() {
+  const setTheme = (value: string) => {
+    localStorage.setItem('theme', value)
+    location.reload()
+  }
+  return (
+    <div>
+      <button onClick={() => setTheme('light')}>Light</button>
+      <button onClick={() => setTheme('dark')}>Dark</button>
+      <button onClick={() => setTheme('system')}>System</button>
+    </div>
+  )
+}
 ```
 
-### Responsive Variants (Mobile/Desktop)
+### View Mode (Cookie)
 
 ```tsx
-<ClientInit
-  reads={{
-    viewport: {
-      from: 'media',
-      query: '(min-width: 768px)',
-      trueValue: 'desktop',
-      falseValue: 'mobile',
-      default: 'mobile',
-    },
-  }}
-  apply={[
-    { type: 'html-attr', name: 'data-viewport', valueFrom: 'viewport' },
-  ]}
-/>
+export const viewMode = variant({
+  key: 'view-mode',
+  options: ['grid', 'list', 'compact'] as const,
+  default: 'list',
+  read: fromCookie('view_mode')
+})
 
-<ClientVariants
-  select={{ attr: 'data-viewport', default: 'mobile' }}
-  variants={{
-    mobile: <MobileNav />,
-    desktop: <DesktopNav />,
-  }}
-  prune="after-hydration"
-/>
+// Update
+document.cookie = 'view_mode=grid;path=/;max-age=31536000'
+location.reload()
 ```
 
-### Search Param-Based View
+### Feature Flags (URL Param)
 
 ```tsx
-<ClientInit
-  reads={{
-    view: {
-      from: 'search',
-      name: 'view',
-      allow: ['grid', 'list'],
-      default: 'grid',
-    },
-  }}
-  apply={[
-    { type: 'html-attr', name: 'data-view', valueFrom: 'view' },
-  ]}
-/>
+export const featureFlag = variant({
+  key: 'feature',
+  options: ['stable', 'beta', 'experimental'] as const,
+  default: 'stable',
+  read: fromSearchParam('feature')
+})
+
+// Usage: ?feature=beta
 ```
 
-### Cookie-Based Language
+### Motion Preference (Media Query)
 
 ```tsx
-<ClientInit
-  reads={{
-    lang: {
-      from: 'cookie',
-      name: 'NEXT_LOCALE',
-      allow: ['en', 'fr', 'es', 'de'],
-      default: 'en',
-      pattern: '^[a-z]{2}$',
-    },
+export const motionPref = variant({
+  key: 'motion',
+  options: ['full', 'reduced'] as const,
+  default: 'full',
+  read: fromMediaQuery('(prefers-reduced-motion: reduce)', {
+    true: 'reduced',
+    false: 'full'
+  })
+})
+```
+
+### System Color Scheme (Media Query)
+
+```tsx
+export const colorScheme = variant({
+  key: 'color-scheme',
+  options: ['light', 'dark'] as const,
+  default: 'light',
+  read: fromMediaQuery('(prefers-color-scheme: dark)', {
+    true: 'dark',
+    false: 'light'
+  })
+})
+```
+
+## TypeScript
+
+Variant options are fully typed:
+
+```tsx
+const theme = variant({
+  key: 'theme',
+  options: ['light', 'dark'] as const,  // Note: as const
+  default: 'light',
+  read: fromLocalStorage('theme')
+})
+
+// TypeScript knows children must have 'light' and 'dark' keys
+<Variants use={theme}>
+  {{
+    light: <div>Light</div>,
+    dark: <div>Dark</div>,
+    // @ts-error: 'blue' is not assignable
+    blue: <div>Blue</div>
   }}
-  apply={[
-    { type: 'html-attr', name: 'lang', valueFrom: 'lang' },
-  ]}
-/>
+</Variants>
 ```
 
 ## Important Notes
 
-### Hydration Mismatches
+### Hydration Safety
 
-- **ClientInit**: Safe - only modifies DOM, doesn't affect React tree
-- **ClientVariants**: Safe - renders ALL variants, CSS hides inactive ones
-- **Client Code**: Be careful! If you use the snapshot in rendering, ensure SSR returns the default
-
-### resolveSystemTheme
-
-When `resolveSystemTheme: true`, the value "system" is resolved to "dark" or "light" using `matchMedia('(prefers-color-scheme: dark)')`. The resolved value is both:
-- Applied to the DOM
-- Stored in the snapshot (if `resolveSystemTheme` is true)
-
-### Security Constraints
-
-- Max 8 keys in `reads`
-- Max value length: 128 chars (configurable via `maxLen`)
-- Inline script: ≤2KB gzipped
-- No arbitrary JS execution
-
-### Deduplication
-
-**Only one ClientInit per page.** Multiple instances will throw an error.
+The `<Variants>` component is hydration-safe because:
+- All variants are rendered on the server
+- CSS hides non-matching variants (no content flash)
+- React doesn't see a mismatch because all content exists in the DOM
+- After hydration, hidden variants are pruned from the DOM
 
 ### CSP (Content Security Policy)
 
 This package uses inline scripts. Ensure your CSP allows:
-- `script-src 'unsafe-inline'` OR
-- Use a nonce-based CSP (not yet supported in v0)
+- `script-src 'unsafe-inline'`
 
-## Build & Development
+### Multiple Variants
 
-```bash
-npm install
-npm run typecheck   # Type checking
-npm run check-size  # Validate script size
-npm run build       # Build package
-```
+You can use multiple `<Variants>` components on the same page, even with the same variant definition. Each instance is independent.
 
 ## License
 
 MIT
-
-## Contributing
-
-Issues and PRs welcome!
