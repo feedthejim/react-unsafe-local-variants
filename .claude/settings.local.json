@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(test:*)",
+      "Bash(npm install)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run check-size:*)",
+      "Bash(npm run build:*)",
+      "Bash(curl:*)",
+      "Bash(npx playwright install chromium)",
+      "Bash(npx playwright test --reporter=line)",
+      "Bash(npx playwright test:*)",
+      "Bash(npm run dev:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(cat:*)"
+    ]
+  }
+}
